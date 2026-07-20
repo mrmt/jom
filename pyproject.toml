@@ -1,0 +1,28 @@
+[project]
+name = "jom"
+version = "0.1.0"
+description = "動画を重複除去→日付降順で連結し日付テロップを焼き込むツール"
+requires-python = ">=3.11"
+dependencies = [
+    "imagehash>=4.3.1",
+    "pillow>=10.0.0",
+    "click>=8.1.7",
+]
+
+[project.scripts]
+jom = "jom.main:cli"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/jom"]
