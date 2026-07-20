@@ -192,3 +192,7 @@ ffprobe -v error -show_entries format_tags=date,creation_time -of default=nw=1 i
 - YouTube アップロードは未実装 (今後追加予定)
 - pHash 閾値は経験値。誤検出/見逃しがあれば `src/jom/dedup.py` の `PHASH_THRESHOLD` を調整
 - 音声指紋 (chromaprint) までは実装していない。極端な解像度変更や強クロップされた重複動画は検出できない可能性
+
+## ライセンス
+
+MIT License。詳細は [LICENSE](LICENSE) を参照。

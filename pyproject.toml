@@ -2,6 +2,8 @@
 name = "jom"
 version = "0.1.0"
 description = "動画を重複除去→日付降順で連結し日付テロップを焼き込むツール"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "imagehash>=4.3.1",
