@@ -9,8 +9,10 @@ from .concat import concat
 from .dedup import dedup
 from .metadata import probe
 from .normalize import normalize
+from .overrides import load_overrides
 
 VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".avi", ".mkv"}
+OVERRIDES_FILE = "dates.txt"
 
 
 def _collect(assets_dir: Path) -> list[Path]:
@@ -37,6 +39,19 @@ def cli(assets_dir: Path, work_dir: Path, output_dir: Path, name: str, skip_norm
 
     click.echo(f"[1/5] メタデータ抽出 ({len(files)}件)")
     metas = [probe(p) for p in files]
+
+    overrides = load_overrides(assets_dir / OVERRIDES_FILE)
+    if overrides:
+        applied = 0
+        unmatched = set(overrides) - {m.path.name for m in metas}
+        for m in metas:
+            if m.path.name in overrides:
+                m.creation_time = overrides[m.path.name]
+                applied += 1
+                click.echo(f"  override: {m.path.name} -> {m.date_label}")
+        click.echo(f"  {OVERRIDES_FILE} から {applied}件適用")
+        for name in sorted(unmatched):
+            click.echo(f"  警告: {OVERRIDES_FILE} の '{name}' に対応する動画無し")
 
     click.echo(f"[2/5] 重複検出")
     survivors, dropped = dedup(metas)

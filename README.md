@@ -112,11 +112,30 @@ jom/
 
 優先順位:
 
-1. `ffprobe` で取得できる `format.tags.date` (タイムゾーン付き。iPhone等が撮影時ローカル時刻で書き込む)
-2. `format.tags.creation_time` (通常UTC。`date` が無い動画向け)
-3. ファイルの mtime (共有経由でメタデータが剥がれた動画向けフォールバック)
+1. `assets/dates.txt` による手動オーバーライド (下記参照)
+2. `ffprobe` で取得できる `format.tags.date` (タイムゾーン付き。iPhone等が撮影時ローカル時刻で書き込む)
+3. `format.tags.creation_time` (通常UTC。`date` が無い動画向け)
+4. ファイルの mtime (共有経由でメタデータが剥がれた動画向けフォールバック)
 
 TZ 付きのタグは端末のローカルタイムゾーンに変換して表示する。
+
+### 手動オーバーライド (`assets/dates.txt`)
+
+メタデータが無い/間違っている動画に対して、テキストファイルで日時を指定できる。書式:
+
+```text
+# コメント行 (先頭が # の行は無視、空行も無視)
+IMG_2566.MOV,2020-01-15T10:00:00+09:00
+old_video.mp4,2019-06-30T18:30:00+09:00
+```
+
+- 各行は `<ファイル名>,<ISO 8601 日時>` の形式
+- ファイル名は `assets/` 内のベース名 (パス無し、大文字小文字区別)
+- 日時は ISO 8601。タイムゾーン付き推奨 (`+09:00` 等)。省略時はローカル時刻扱い
+- `dates.txt` は git 管理対象外 (`assets/.gitignore` で除外済み)
+- 対応する動画が無いエントリは警告表示のみで無視 (エラーにはしない)
+
+動画自体の `date` タグを書き換えたい場合は README 末尾 「動画のタグを直接書き換える」参照。
 
 ## 正規化仕様
 
@@ -143,6 +162,30 @@ TZ 付きのタグは端末のローカルタイムゾーンに変換して表�
 - フォント: システムの Helvetica / HelveticaNeue / Arial のいずれか
 
 Pillow で PNG を生成 → ffmpeg の `overlay` フィルタで合成している (レイアウトを Python 側で完結させるため。標準版 Homebrew ffmpeg には `drawtext` が無い都合もある)。
+
+## 動画のタグを直接書き換える
+
+`dates.txt` を使わず動画ファイルの `date` タグ自体を修正したい場合は ffmpeg で再エンコードなしに可能。
+
+```bash
+# 単一ファイル
+ffmpeg -i input.mov -c copy -metadata date="2025-03-14T10:30:00+09:00" output.mov
+
+# 元ファイル置換
+ffmpeg -y -i input.mov -c copy -metadata date="2025-03-14T10:30:00+09:00" tmp.mov \
+  && mv tmp.mov input.mov
+
+# 一括
+for f in assets/*.mov; do
+  ffmpeg -y -i "$f" -c copy -metadata date="2025-03-14T10:30:00+09:00" "$f.tmp.mov" \
+    && mv "$f.tmp.mov" "$f"
+done
+```
+
+確認:
+```bash
+ffprobe -v error -show_entries format_tags=date,creation_time -of default=nw=1 input.mov
+```
 
 ## 制限事項
 
