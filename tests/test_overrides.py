@@ -8,7 +8,9 @@ from jom.overrides import load_overrides
 
 
 def test_missing_file_returns_empty(tmp_path: Path):
-    assert load_overrides(tmp_path / "nope.txt") == {}
+    o = load_overrides(tmp_path / "nope.txt")
+    assert o.dates == {}
+    assert o.epoch is None
 
 
 def test_parses_simple_entries(tmp_path: Path):
@@ -19,10 +21,11 @@ def test_parses_simple_entries(tmp_path: Path):
         "a.mov,2025-03-14T10:30:00+09:00\n"
         "  b.mp4  ,  2025-04-01T15:00:00\n"
     )
-    d = load_overrides(p)
-    assert set(d) == {"a.mov", "b.mp4"}
-    assert d["a.mov"].year == 2025 and d["a.mov"].month == 3 and d["a.mov"].day == 14
-    assert d["b.mp4"].month == 4
+    o = load_overrides(p)
+    assert set(o.dates) == {"a.mov", "b.mp4"}
+    assert o.dates["a.mov"].year == 2025 and o.dates["a.mov"].month == 3 and o.dates["a.mov"].day == 14
+    assert o.dates["b.mp4"].month == 4
+    assert o.epoch is None
 
 
 def test_rejects_bad_line(tmp_path: Path):
@@ -45,5 +48,27 @@ def test_last_wins_on_duplicate(tmp_path: Path):
         "a.mov,2020-01-01T00:00:00\n"
         "a.mov,2025-06-15T12:00:00\n"
     )
-    d = load_overrides(p)
-    assert d["a.mov"].year == 2025
+    o = load_overrides(p)
+    assert o.dates["a.mov"].year == 2025
+
+
+def test_parses_epoch(tmp_path: Path):
+    p = tmp_path / "dates.txt"
+    p.write_text(
+        "epoch,2025-03-14T00:00:00\n"
+        "a.mov,2025-03-15T10:00:00\n"
+    )
+    o = load_overrides(p)
+    assert o.epoch is not None
+    assert o.epoch.year == 2025 and o.epoch.month == 3 and o.epoch.day == 14
+    assert set(o.dates) == {"a.mov"}
+
+
+def test_epoch_last_wins(tmp_path: Path):
+    p = tmp_path / "dates.txt"
+    p.write_text(
+        "epoch,2020-01-01T00:00:00\n"
+        "epoch,2025-06-15T00:00:00\n"
+    )
+    o = load_overrides(p)
+    assert o.epoch is not None and o.epoch.year == 2025

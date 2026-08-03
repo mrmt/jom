@@ -16,10 +16,15 @@ class VideoMeta:
     duration: float
     vcodec: str
     creation_time: datetime  # ローカル時刻
+    epoch: datetime | None = None  # 指定時 date_label に (day N) が付く
 
     @property
     def date_label(self) -> str:
-        return self.creation_time.strftime("%Y-%m-%d %H:%M")
+        base = self.creation_time.strftime("%Y-%m-%d %H:%M")
+        if self.epoch is None:
+            return base
+        n = (self.creation_time.date() - self.epoch.date()).days + 1
+        return f"{base} (day {n})"
 
     @property
     def pixels(self) -> int:

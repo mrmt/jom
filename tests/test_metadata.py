@@ -5,7 +5,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 
-from jom.metadata import probe
+from jom.metadata import VideoMeta, probe
 
 
 def test_probe_reads_resolution_and_duration(red: Path):
@@ -59,6 +59,29 @@ def test_probe_falls_back_to_mtime_when_metadata_missing(tmp_path: Path):
 def test_date_label_format(red: Path):
     m = probe(red)
     assert m.date_label == m.creation_time.strftime("%Y-%m-%d %H:%M")
+
+
+def _meta(**kw) -> VideoMeta:
+    defaults = dict(path=Path("x.mp4"), width=1, height=1, duration=0.0, vcodec="h264",
+                    creation_time=datetime(2025, 1, 1, 0, 0))
+    defaults.update(kw)
+    return VideoMeta(**defaults)
+
+
+def test_date_label_with_epoch_appends_day():
+    m = _meta(creation_time=datetime(2025, 3, 20, 10, 30), epoch=datetime(2025, 3, 14, 0, 0))
+    # 3/14=day1, 3/15=day2, ..., 3/20=day7
+    assert m.date_label == "2025-03-20 10:30 (day 7)"
+
+
+def test_date_label_epoch_same_day_is_day1():
+    m = _meta(creation_time=datetime(2025, 3, 14, 23, 59), epoch=datetime(2025, 3, 14, 0, 0))
+    assert m.date_label == "2025-03-14 23:59 (day 1)"
+
+
+def test_date_label_without_epoch_omits_day():
+    m = _meta(creation_time=datetime(2025, 3, 14, 10, 30))
+    assert m.date_label == "2025-03-14 10:30"
 
 
 def test_pixels_computes_area(red: Path):
