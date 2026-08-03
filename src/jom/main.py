@@ -41,17 +41,21 @@ def cli(assets_dir: Path, work_dir: Path, output_dir: Path, name: str, skip_norm
     metas = [probe(p) for p in files]
 
     overrides = load_overrides(assets_dir / OVERRIDES_FILE)
-    if overrides:
-        applied = 0
-        unmatched = set(overrides) - {m.path.name for m in metas}
+    if overrides.epoch is not None:
+        click.echo(f"  epoch: {overrides.epoch.strftime('%Y-%m-%d')} (以降 (day N) を付与)")
         for m in metas:
-            if m.path.name in overrides:
-                m.creation_time = overrides[m.path.name]
+            m.epoch = overrides.epoch
+    if overrides.dates:
+        applied = 0
+        unmatched = set(overrides.dates) - {m.path.name for m in metas}
+        for m in metas:
+            if m.path.name in overrides.dates:
+                m.creation_time = overrides.dates[m.path.name]
                 applied += 1
                 click.echo(f"  override: {m.path.name} -> {m.date_label}")
         click.echo(f"  {OVERRIDES_FILE} から {applied}件適用")
-        for name in sorted(unmatched):
-            click.echo(f"  警告: {OVERRIDES_FILE} の '{name}' に対応する動画無し")
+        for missing in sorted(unmatched):
+            click.echo(f"  警告: {OVERRIDES_FILE} の '{missing}' に対応する動画無し")
 
     click.echo(f"[2/5] 重複検出")
     survivors, dropped = dedup(metas)
