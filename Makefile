@@ -1,4 +1,4 @@
-.PHONY: help setup run redo concat test clean clean-output clean-work open assets
+.PHONY: help setup run redo concat upload run-upload test clean clean-output clean-work open assets
 
 help:  ## このヘルプを表示
 	@awk 'BEGIN{FS=":.*##"; printf "\n使い方: make \033[36m<target>\033[0m\n\n"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -17,6 +17,12 @@ test:  ## テスト実行
 
 concat:  ## redoのエイリアス
 	uv run jom --skip-normalize
+
+upload:  ## 生成済み動画をYouTubeにアップロード (output/jom.mp4)
+	uv run jom-upload
+
+run-upload:  ## パイプライン実行してそのままYouTubeへアップロード
+	uv run jom --upload
 
 open:  ## 最終動画を再生
 	open output/jom.mp4

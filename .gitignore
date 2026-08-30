@@ -5,3 +5,5 @@ work/
 output/
 .uv-cache/
 .DS_Store
+client_secret*.json
+*token*.json

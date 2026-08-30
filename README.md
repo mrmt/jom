@@ -10,12 +10,14 @@
 4. 1920x1080 / 30fps / H.264 / AAC に正規化 (縦動画は左右黒帯レターボックス)
 5. 画面下中央に半透明黒背景の白文字で日時テロップ (`YYYY-MM-DD HH:MM`) を焼き込む
 6. `output/jom.mp4` に連結出力
+7. (任意) そのまま YouTube にアップロード (`--upload`)
 
 ## 必要なもの
 
 - macOS + [Homebrew](https://brew.sh/)
 - `ffmpeg` (**libzimg / libplacebo 入り推奨**。iPhone の HDR (HLG/PQ) 動画を混ぜる場合は必須)
 - `uv` (Python パッケージ管理)
+- (YouTube アップロードを使う場合のみ) Google アカウントと OAuth クライアント → [YouTube アップロード](#youtube-アップロード) 参照
 
 Homebrew 標準の `brew install ffmpeg` は libzimg/libplacebo 非対応のため、HDR 動画が混ざると色が崩れる。HDR を扱うなら以下を推奨:
 
@@ -45,6 +47,9 @@ make run
 
 # 3. 出力を再生
 make open
+
+# 4. (任意) YouTube にアップロード
+make upload
 ```
 
 ### コマンド一覧
@@ -58,6 +63,8 @@ make help
 | `make setup` | 初回の依存インストール |
 | `make run` | 全工程実行 (`assets/` → `output/jom.mp4`) |
 | `make redo` | `work/` の正規化済みを再利用して連結だけやり直し |
+| `make upload` | 生成済み `output/jom.mp4` を YouTube にアップロード |
+| `make run-upload` | 全工程実行してそのまま YouTube にアップロード |
 | `make open` | 最終動画を再生 |
 | `make assets` | `assets/` フォルダを Finder で開く |
 | `make test` | テスト実行 |
@@ -72,6 +79,11 @@ uv run jom                       # デフォルト
 uv run jom --name mymix.mp4      # 出力名指定
 uv run jom --skip-normalize      # work/再利用
 uv run jom --assets /path/to/dir # 別ディレクトリを対象
+uv run jom --upload              # 連結後そのままYouTubeへ
+
+uv run jom-upload                       # output/jom.mp4 をアップロード
+uv run jom-upload path/to/movie.mp4     # 任意の動画をアップロード
+uv run jom-upload --privacy unlisted --title '家族旅行' --tags '旅行,2025'
 ```
 
 ## ディレクトリ構成
@@ -86,6 +98,7 @@ jom/
 │   ├── dedup.py        # SHA-256 + pHash 重複検出
 │   ├── normalize.py    # 1080p化 + 日付PNG overlay
 │   ├── concat.py       # concat demuxer で連結
+│   ├── youtube.py      # YouTube Data API v3 アップロード
 │   └── main.py         # CLI エントリ
 ├── tests/
 ├── Makefile
@@ -167,6 +180,82 @@ epoch,2020-01-15T00:00:00+09:00
 
 Pillow で PNG を生成 → ffmpeg の `overlay` フィルタで合成している (レイアウトを Python 側で完結させるため。標準版 Homebrew ffmpeg には `drawtext` が無い都合もある)。
 
+## YouTube アップロード
+
+完成した動画を YouTube Data API v3 で直接アップロードできる。
+
+### 初回セットアップ (OAuth クライアントの用意)
+
+YouTube API は個人のチャンネルに書き込むため、自分用の OAuth クライアントが要る。
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクトを作る (既存でも可)
+2. 「APIとサービス」→「ライブラリ」で **YouTube Data API v3** を有効化
+3. 「APIとサービス」→「OAuth同意画面」を設定 (ユーザーの種類: 外部 / 公開ステータス: テスト)。
+   「テストユーザー」に自分の Google アカウントを追加する
+4. 「APIとサービス」→「認証情報」→「認証情報を作成」→「OAuth クライアント ID」→
+   アプリケーションの種類 **デスクトップアプリ** で作成し、JSON をダウンロード
+5. その JSON を `~/.config/jom/client_secret.json` に置く
+
+```bash
+mkdir -p ~/.config/jom
+mv ~/Downloads/client_secret_*.json ~/.config/jom/client_secret.json
+```
+
+### 認証の流れ
+
+初回実行時にブラウザが開いて Google アカウントの許可を求められる。許可すると
+`~/.config/jom/youtube_token.json` にトークン (パーミッション 600) が保存され、
+2回目以降は自動で再利用・自動更新される。
+
+SSH 越しなどブラウザを開けない環境では `--no-browser` を付けると URL が表示される。
+
+要求するスコープは `https://www.googleapis.com/auth/youtube.upload` (アップロード専用)
+のみで、既存動画の読み取りや削除はできない。
+
+### 使い方
+
+```bash
+make upload                              # output/jom.mp4 を非公開でアップロード
+make run-upload                          # 連結からアップロードまで一気に
+
+uv run jom --upload --privacy unlisted   # パイプライン実行→限定公開でアップロード
+uv run jom-upload path/to/movie.mp4 --title '家族旅行 2025' --tags '旅行,家族'
+uv run jom-upload --description-file notes.txt
+```
+
+### アップロード用オプション
+
+`jom --upload` と `jom-upload` で共通。
+
+| オプション | 既定値 | 説明 |
+|---|---|---|
+| `--title` | 出力ファイル名 + 撮影日レンジ | 動画タイトル |
+| `--description` | (空) | 説明文 |
+| `--description-file` | - | 説明文をファイルから読む (`--description` より優先) |
+| `--tags` | (空) | タグ。カンマ区切り (`旅行,家族`) |
+| `--privacy` | `private` | `private` / `unlisted` / `public` |
+| `--category-id` | `22` | YouTube のカテゴリID (22 = People & Blogs) |
+| `--made-for-kids` | off | 子ども向けコンテンツとして申告 |
+| `--client-secrets` | `~/.config/jom/client_secret.json` | OAuth クライアントシークレット JSON |
+| `--token` | `~/.config/jom/youtube_token.json` | トークンの保存先 |
+| `--no-browser` | off | ブラウザを自動起動せず URL 表示のみ |
+
+`--client-secrets` / `--token` は環境変数 `JOM_YOUTUBE_CLIENT_SECRETS` /
+`JOM_YOUTUBE_TOKEN` でも指定できる。
+
+`--title` 未指定時は出力ファイル名 (拡張子なし) に撮影日レンジが付く
+(例: `jom 2025-03-14〜2025-03-20`)。`jom-upload` で単体の動画を渡した場合は
+撮影日が分からないためファイル名のみ。
+
+### 仕様と注意
+
+- 8MB チャンクの resumable upload。通信断や 5xx は指数バックオフで最大5回リトライ
+- 既定は `private` (非公開)。意図せず公開されるのを防ぐため明示指定しない限り公開しない
+- 未審査 (テストモード) の OAuth アプリからのアップロードは、`public` を指定しても
+  YouTube 側で非公開に固定される。公開したい場合は YouTube Studio 側で変更する
+- API クォータは既定 1日 10,000 ユニット、アップロード1本 1,600 ユニット (実質 1日6本程度)
+- `client_secret*.json` と `*token*.json` は `.gitignore` 済み。**リポジトリにコミットしない**
+
 ## 動画のタグを直接書き換える
 
 `dates.txt` を使わず動画ファイルの `date` タグ自体を修正したい場合は ffmpeg で再エンコードなしに可能。
@@ -193,7 +282,8 @@ ffprobe -v error -show_entries format_tags=date,creation_time -of default=nw=1 i
 
 ## 制限事項
 
-- YouTube アップロードは未実装 (今後追加予定)
+- YouTube アップロードは 1日あたりのAPIクォータ (既定 10,000ユニット / 1本 1,600ユニット) の範囲でのみ可能 → 実質 1日6本程度
+- 未審査 (テスト) の OAuth アプリでアップロードした動画は、`--privacy public` を指定しても YouTube 側で非公開に固定される (自分のチャンネルで公開設定に変更すればよい)
 - pHash 閾値は経験値。誤検出/見逃しがあれば `src/jom/dedup.py` の `PHASH_THRESHOLD` を調整
 - 音声指紋 (chromaprint) までは実装していない。極端な解像度変更や強クロップされた重複動画は検出できない可能性
 
